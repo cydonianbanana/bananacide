@@ -7,7 +7,7 @@ configuration:
   analytics:
     provider: plausible
   locale: en-US
-  baseUrl: cydonianbanana.github.io/diary
+  baseUrl: cydonianbanana.net
   ignorePatterns:
     - private
     - templates
