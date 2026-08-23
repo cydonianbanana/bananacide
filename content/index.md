@@ -2,9 +2,10 @@
 title: bananacide
 ---
 
-- [[journal/index|Journal]]
-- [[blog/index|Blog]]
-- [[works/index|Works]]
+- [[journal|Journal]]
+- [[blog|Blog]]
+- [[works|Works]]
+- [[photo|Photo]]
 
 - Mastodon: [cydonianbanana@fedibird.com](https://fedibird.com/@cydonianbanana)
 - Bluesky: [@cydonianbanana.bsky.social](https://bsky.app/profile/cydonianbanana.bsky.social)

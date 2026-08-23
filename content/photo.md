@@ -1,7 +1,5 @@
 ---
 title: Photo
 ---
-
 # Photo
-
-Coming soon.
+[[九を失する]]
