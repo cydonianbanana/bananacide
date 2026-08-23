@@ -5,10 +5,26 @@ title: Journal
 # Journal
 
 ![[2026-08-23]]
-<span style="display:none">[[2026-08-23]]</span>
+<div style="display:none">
+
+[[2026-08-23]]
+
+</div>
 ![[2026-07-24]]
-<span style="display:none">[[2026-07-24]]</span>
+<div style="display:none">
+
+[[2026-07-24]]
+
+</div>
 ![[2026-07-12]]
-<span style="display:none">[[2026-07-12]]</span>
+<div style="display:none">
+
+[[2026-07-12]]
+
+</div>
 ![[2026-07-11]]
-<span style="display:none">[[2026-07-11]]</span>
+<div style="display:none">
+
+[[2026-07-11]]
+
+</div>
