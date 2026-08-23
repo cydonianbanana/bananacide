@@ -7,6 +7,8 @@ title: bananacide
 - [[works|Works]]
 - [[photo|Photo]]
 
+----
+
 - Mastodon: [cydonianbanana@fedibird.com](https://fedibird.com/@cydonianbanana)
 - Bluesky: [@cydonianbanana.bsky.social](https://bsky.app/profile/cydonianbanana.bsky.social)
 - Twitter: [https://twitter.com/cydonianbanana](https://twitter.com/cydonianbanana)
