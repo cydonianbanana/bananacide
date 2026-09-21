@@ -109,12 +109,22 @@ body.stacked #flow .track[data-role]::before {
   color: color-mix(in srgb, var(--ink) 58%, var(--paper));
 }
 
+/* 傾斜する帯の、1ページぶんの切れ端。中身は組み付けのたびに切り直す */
+#flow .track.slice {
+  overflow: hidden;
+}
+
 #flow p {
   margin: 0;
   text-indent: 1em;
 }
 
 #flow p.gap {
+  text-indent: 0;
+}
+
+/* ページをまたいだ段落の、続きのほう */
+#flow p.cont {
   text-indent: 0;
 }
 

@@ -17,6 +17,9 @@ const FAINT_SCALE = 0.86
 // 帯を並べるには、いちばん狭い帯にこれだけの字数が要る。
 // 足りない画面では並置をやめ、帯を順に読ませる
 const MIN_CHARS_PER_BAND = 8
+// 傾斜する帯が、いちばん狭くなったときでも確保する字数と、流し込みの安全弁
+const MIN_CHARS_PER_RAMP = 3
+const MAX_RAMP_PAGES = 400
 const SWIPE_THRESHOLD = 40
 const SETTINGS_KEY = "reader:settings"
 
@@ -141,7 +144,7 @@ function buildPlate(figure) {
 
   wrap.append(image, caption)
   el.append(wrap)
-  return { el, tracks: [], figure, heading: null, startPage: 0, pageCount: 1 }
+  return { el, tracks: [], figure, heading: null, startPage: 0, pageCount: 1, ramped: false }
 }
 
 function buildTrack(def, heading) {
@@ -149,18 +152,28 @@ function buildTrack(def, heading) {
   node.className = def.style === "faint" ? "track faint" : "track"
   if (def.role) node.dataset.role = def.role
 
+  let title = null
   if (heading) {
-    const title = document.createElement("h2")
+    title = document.createElement("h2")
     title.textContent = heading
     node.append(title)
   }
   appendBlocks(node, def.blocks)
 
+  // 帯の位置と高さは、数値のほかに [始め, 終わり] の傾斜も取る。
+  // 傾斜する帯はページごとに高さが変わるので、級数は主従で変えない
+  const ramped = Array.isArray(def.top) || Array.isArray(def.height)
+
   return {
     node,
-    top: typeof def.top === "number" ? def.top : 0,
-    height: typeof def.height === "number" ? def.height : 1,
-    scale: def.style === "faint" ? FAINT_SCALE : 1,
+    heading: title,
+    blocks: Array.from(node.children).filter((child) => child !== title),
+    top: def.top === undefined ? 0 : def.top,
+    height: def.height === undefined ? 1 : def.height,
+    scale: !ramped && def.style === "faint" ? FAINT_SCALE : 1,
+    style: def.style || "",
+    role: def.role || "",
+    ramped,
   }
 }
 
@@ -179,14 +192,25 @@ function render() {
     const defs = source.tracks || [{ top: 0, height: 1, blocks: source.blocks }]
     // 節の見出しは主の声に付ける。終章で灰の語りが上の帯に来ても、
     // 見出しは本文の側に残る
-    const titled = Math.max(0, defs.findIndex((def) => def.style !== "faint"))
+    const titled = Math.max(
+      0,
+      defs.findIndex((def) => def.style !== "faint"),
+    )
     const tracks = defs.map((def, index) =>
       buildTrack(def, index === titled ? source.heading : null),
     )
     for (const track of tracks) el.append(track.node)
 
     els.flow.append(el)
-    return { el, tracks, figure: null, heading: source.heading, startPage: 0, pageCount: 1 }
+    return {
+      el,
+      tracks,
+      figure: null,
+      heading: source.heading,
+      startPage: 0,
+      pageCount: 0,
+      ramped: tracks.some((track) => track.ramped),
+    }
   })
 }
 
@@ -203,6 +227,273 @@ function measureTrack(track) {
   return left < box.right ? box.right - left : box.width
 }
 
+// 傾斜する帯
+//
+// 高さがページごとに変わる帯は、ひとつづきの縦組フローには載らない。
+// ページを1枚ずつ作り、入るところまで流しては切る。
+//
+// 筐体反転の終章がこれで、初出は1行45字・1ページ19行の紙面に、上段（日誌）が
+// 30→22→14→6字と痩せ、下段（灰の語り）がそのぶん太る。位置は動かず、面積が
+// 並ぶ2枚目を境に主客が入れ替わる。台本の「0.667→0.133」はこの動きで、
+// 節のページ数で割って補間するので、画面が変わっても身振りは残る。
+
+function bandStart(value) {
+  return Array.isArray(value) ? value[0] : value
+}
+
+function bandMean(value) {
+  return Array.isArray(value) ? (value[0] + value[1]) / 2 : value
+}
+
+function rampAt(value, page, pages) {
+  if (!Array.isArray(value)) return value
+  if (pages <= 1) return value[0]
+  const ratio = Math.min(1, Math.max(0, page / (pages - 1)))
+  return value[0] + (value[1] - value[0]) * ratio
+}
+
+// このページの帯の位置。上下2本の前提で、帯のあいだのアキを保ったまま、
+// 狭いほうの帯に最低限の字数を残す
+function bandShares(section, page, pages, geom) {
+  const shares = section.tracks.map((track) => ({
+    top: rampAt(track.top, page, pages),
+    height: rampAt(track.height, page, pages),
+  }))
+
+  if (shares.length === 2) {
+    const gap = Math.max(0, shares[1].top - shares[0].height)
+    const least = Math.min(0.4, (MIN_CHARS_PER_RAMP * geom.fontSize) / geom.lineLength)
+    const head = Math.min(Math.max(shares[0].height, least), 1 - gap - least)
+    shares[0] = { top: 0, height: head }
+    shares[1] = { top: head + gap, height: 1 - head - gap }
+  }
+
+  // 狭いほうの帯が淡くなる。字数が並ぶページでは、台本が淡と書いたほうを淡いままにする
+  const lines = shares.map((share) => Math.round((share.height * geom.lineLength) / geom.fontSize))
+  const widest = Math.max(...lines)
+  const main = lines.map((n, i) => n === widest && section.tracks[i].style !== "faint")
+  const decided = main.some(Boolean)
+  shares.forEach((share, i) => {
+    share.faint = decided ? !main[i] : lines[i] < widest
+  })
+  return shares
+}
+
+function textNodes(node) {
+  const list = []
+  let total = 0
+  const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT)
+  for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+    list.push({ node: text, start: total })
+    total += text.data.length
+  }
+  return { list, total }
+}
+
+function spotAt(list, index) {
+  let hit = list[0]
+  for (const item of list) {
+    if (item.start > index) break
+    hit = item
+  }
+  if (!hit) return null
+  return { node: hit.node, offset: Math.min(Math.max(0, index - hit.start), hit.node.data.length) }
+}
+
+// ページに入る最後の位置。縦組では文字の x 座標が文書順に単調に減るので、
+// 先頭からそこまでの範囲の幅で判定でき、二分探索が効く
+function fitLength(node, limit) {
+  const { list, total } = textNodes(node)
+  if (!total) return { total: 0, cut: 0 }
+
+  const right = node.getBoundingClientRect().right
+  const range = document.createRange()
+  const fits = (index) => {
+    const spot = spotAt(list, index)
+    if (!spot) return true
+    range.setStart(list[0].node, 0)
+    range.setEnd(spot.node, spot.offset)
+    const box = range.getBoundingClientRect()
+    return !box.width || right - box.left <= limit + 0.5
+  }
+
+  if (fits(total)) return { total, cut: total }
+
+  let low = 0
+  let high = total
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2)
+    if (fits(mid)) low = mid
+    else high = mid - 1
+  }
+  return { total, cut: low }
+}
+
+// 親文字を落としきったルビは、振り仮名だけが残ってしまうので畳む
+function pruneRuby(node) {
+  for (const ruby of node.querySelectorAll("ruby")) {
+    const base = Array.from(ruby.childNodes)
+      .filter((child) => child.nodeName !== "RT")
+      .map((child) => child.textContent)
+      .join("")
+    if (!base.trim()) ruby.remove()
+  }
+}
+
+function dropText(node, count) {
+  let left = count
+  for (const item of textNodes(node).list) {
+    if (left <= 0) break
+    if (item.node.data.length <= left) {
+      left -= item.node.data.length
+      item.node.data = ""
+    } else {
+      item.node.data = item.node.data.slice(left)
+      left = 0
+    }
+  }
+  pruneRuby(node)
+}
+
+function truncate(node, index) {
+  const { list, total } = textNodes(node)
+  if (index >= total) return
+  const spot = spotAt(list, index)
+  if (!spot) return
+
+  const range = document.createRange()
+  range.setStart(spot.node, spot.offset)
+  range.setEnd(node, node.childNodes.length)
+  range.deleteContents()
+
+  pruneRuby(node)
+  while (node.lastElementChild && !node.lastElementChild.textContent) {
+    node.lastElementChild.remove()
+  }
+}
+
+// 帯の残りをこのページへ流し、入りきらない分は次のページへ送る
+function fill(stream, node, limit, first) {
+  const blocks = stream.track.blocks
+  if (first && stream.track.heading) node.append(stream.track.heading.cloneNode(true))
+  const head = node.textContent.length
+
+  const parts = []
+  for (let i = stream.at; i < blocks.length; i += 1) {
+    const clone = blocks[i].cloneNode(true)
+    if (i === stream.at && stream.offset) {
+      dropText(clone, stream.offset)
+      clone.classList.add("cont")
+      clone.removeAttribute("data-i")
+    }
+    parts.push({ index: i, el: clone, base: i === stream.at ? stream.offset : 0 })
+    node.append(clone)
+  }
+
+  const room = fitLength(node, limit)
+  if (room.cut >= room.total) {
+    stream.at = blocks.length
+    stream.offset = 0
+    return
+  }
+
+  const cut = Math.max(room.cut, head + 1)
+  let seen = head
+  let next = { index: blocks.length, offset: 0 }
+  for (const part of parts) {
+    const length = part.el.textContent.length
+    if (cut < seen + length) {
+      next = { index: part.index, offset: part.base + (cut - seen) }
+      break
+    }
+    seen += length
+    next = { index: part.index + 1, offset: 0 }
+  }
+  // 1文字も進まないと組み付けが終わらないので、かならず先へ進める
+  if (next.index === stream.at && next.offset <= stream.offset) {
+    next = { index: stream.at, offset: stream.offset + 1 }
+  }
+
+  stream.at = next.index
+  stream.offset = next.offset
+  truncate(node, cut)
+}
+
+function pourSection(section, geom, pages) {
+  section.el.textContent = ""
+  const streams = section.tracks.map((track) => ({ track, at: 0, offset: 0 }))
+  const remains = () => streams.some((stream) => stream.at < stream.track.blocks.length)
+
+  let page = 0
+  while (page < MAX_RAMP_PAGES) {
+    const shares = bandShares(section, page, pages, geom)
+    streams.forEach((stream, i) => {
+      if (stream.at >= stream.track.blocks.length) return
+      const node = document.createElement("div")
+      node.className = shares[i].faint ? "track slice faint" : "track slice"
+      if (stream.track.role) node.dataset.role = stream.track.role
+      node.style.top = `${shares[i].top * 100}%`
+      node.style.height = `${shares[i].height * 100}%`
+      node.style.right = `${page * geom.pageWidth}px`
+      node.style.width = `${geom.pageWidth}px`
+      node.style.fontSize = `${geom.fontSize}px`
+      node.style.lineHeight = `${geom.advance}px`
+      node.style.setProperty("--step", `${geom.advance}px`)
+      section.el.append(node)
+      fill(stream, node, geom.pageWidth, page === 0)
+      if (!node.textContent) node.remove()
+    })
+    page += 1
+    if (!remains()) break
+  }
+  return Math.max(1, page)
+}
+
+// 帯が使う面積の平均から、節の枚数をあたりを付ける
+function guessPages(section, geom) {
+  const lines = Math.max(1, Math.round(geom.pageWidth / geom.advance))
+  let most = 1
+  for (const track of section.tracks) {
+    const chars = track.blocks.reduce((sum, el) => sum + el.textContent.length, 0)
+    const perLine = Math.max(
+      1,
+      Math.floor((bandMean(track.height) * geom.lineLength) / geom.fontSize),
+    )
+    most = Math.max(most, Math.ceil(chars / (lines * perLine)))
+  }
+  return most
+}
+
+// ページ数が決まらないと傾斜が引けず、傾斜が決まらないとページ数が出ない。
+// 見積もりから始めて、流し込んだ枚数が見積もりに追いつくまで繰り返す。
+//
+// 枚数を増やすと傾斜がゆるみ、はじめのページの帯がそのぶん細くなるので、
+// 多めの枚数もそれ自体で辻褄が合ってしまう。前回の結果を種にすると
+// 文字サイズを往復しただけで枚数が増えたままになるため、毎回見積もりから
+// 引き直し、収まる最小の枚数まで詰める
+function paginateRamp(section, geom) {
+  let pages = guessPages(section, geom)
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const used = pourSection(section, geom, pages)
+    if (used <= pages) break
+    pages = used
+  }
+  for (let attempt = 0; attempt < 8 && pages > 1; attempt += 1) {
+    if (pourSection(section, geom, pages - 1) !== pages - 1) break
+    pages -= 1
+  }
+  section.pageCount = pourSection(section, geom, pages)
+}
+
+// 傾斜する帯は組み付けのたびにページを作り直すので、
+// 順に読ませるとき（横書き・stacked）は元の帯を section に戻す
+function restoreSource(section) {
+  if (!section.ramped) return
+  if (section.el.firstChild === section.tracks[0].node) return
+  section.el.textContent = ""
+  for (const track of section.tracks) section.el.append(track.node)
+}
+
 // 組み付け
 
 function layout(keep) {
@@ -215,6 +506,7 @@ function layout(keep) {
 
   if (mode === "horizontal") {
     for (const section of sections) {
+      restoreSource(section)
       section.el.style.right = ""
       section.el.style.width = ""
       for (const track of section.tracks) {
@@ -254,8 +546,9 @@ function layout(keep) {
   els.viewport.style.width = `${pageWidth}px`
   els.viewport.style.height = `${Math.floor(lineLength)}px`
 
-  // いちばん狭い帯が読める高さかどうかで、並置するか順に読ませるかを決める
-  const narrowest = Math.min(1, ...sections.flatMap((s) => s.tracks.map((t) => t.height)))
+  // いちばん狭い帯が読める高さかどうかで、並置するか順に読ませるかを決める。
+  // 傾斜する帯は終わり際だけ細くなるので、平均で見る
+  const narrowest = Math.min(1, ...sections.flatMap((s) => s.tracks.map((t) => bandMean(t.height))))
   const stacked = lineLength * narrowest < fontSize * MIN_CHARS_PER_BAND
   els.body.classList.toggle("stacked", stacked)
 
@@ -266,13 +559,16 @@ function layout(keep) {
 
     if (section.figure) {
       section.pageCount = 1
+    } else if (section.ramped && !stacked) {
+      paginateRamp(section, { pageWidth, lineLength, advance, fontSize })
     } else {
+      restoreSource(section)
       let width = 0
       let stackedWidth = 0
       for (const track of section.tracks) {
         // 順に読ませるときは、どの帯も紙面いっぱいを使う
-        track.node.style.top = stacked ? "0%" : `${track.top * 100}%`
-        track.node.style.height = stacked ? "100%" : `${track.height * 100}%`
+        track.node.style.top = stacked ? "0%" : `${bandStart(track.top) * 100}%`
+        track.node.style.height = stacked ? "100%" : `${bandStart(track.height) * 100}%`
         // 帯ごとに級数を変えても、行送りがページ幅を割り切るようにしておく。
         // そうしないと帯の行がページの境目で真っ二つになる
         const wanted = advance * track.scale
@@ -306,7 +602,14 @@ function layout(keep) {
 
   indexParagraphs()
   buildToc()
-  goto(anchor ? pageOf(anchor) : page, false)
+  // 傾斜する帯のページは組み直しで作り替わる。栞と同じく、段落は番号で捕まえる
+  const kept = anchor && anchor.isConnected ? anchor : findParagraph(anchor && anchor.dataset.i)
+  goto(kept ? pageOf(kept) : page, false)
+}
+
+function findParagraph(index) {
+  if (index === undefined || index === null) return null
+  return els.flow.querySelector(`p[data-i="${CSS.escape(index)}"]`)
 }
 
 // 段落がどのページに載るかを組み付け時に控えておく。
@@ -400,7 +703,7 @@ function saveMark() {
 // 保存されていた値は組み付けの前に読み出しておく
 function restoreMark(mark) {
   if (!mark) return
-  const el = els.flow.querySelector(`p[data-i="${CSS.escape(mark)}"]`)
+  const el = findParagraph(mark)
   if (!el) return
   if (mode === "horizontal") el.scrollIntoView({ block: "start" })
   else goto(pageOf(el), false)
