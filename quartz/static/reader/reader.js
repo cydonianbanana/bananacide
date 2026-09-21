@@ -941,7 +941,9 @@ async function main() {
   }
 
   try {
-    const response = await fetch(`/works/data/${slug}.json`)
+    // GitHub Pages はどのファイルにも max-age=600 を返す。本文だけは公開したそばから
+    // 新しいものを読ませたいので、ETag での問い合わせを毎回させる
+    const response = await fetch(`/works/data/${slug}.json`, { cache: "no-cache" })
     if (!response.ok) throw new Error(String(response.status))
     data = await response.json()
   } catch {
