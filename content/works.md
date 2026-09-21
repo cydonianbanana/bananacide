@@ -20,6 +20,6 @@ title: Works
 
 [[works/kumiki|組木仕掛けの彼は誰]]
 
-## 年不明
+## 2010年
 
 [[works/hifu|皮膚のない太陽]]
