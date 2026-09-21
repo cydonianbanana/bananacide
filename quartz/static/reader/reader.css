@@ -74,16 +74,39 @@ body[data-mode="horizontal"] {
   transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
+/* 節は帯（トラック）の入れ物。本文を流すのは帯のほう */
 #flow section {
   position: absolute;
   top: 0;
   height: 100%;
+}
+
+#flow .track {
+  position: absolute;
+  right: 0;
   width: max-content;
   writing-mode: vertical-rl;
   text-orientation: mixed;
   line-break: strict;
   overflow-wrap: normal;
   word-break: normal;
+}
+
+/* 帯を並べられない画面では順に読ませるので、どの帯かを名乗らせる */
+body.stacked #flow .track[data-role]::before {
+  content: attr(data-role);
+  display: block;
+  line-height: var(--step);
+  padding-block-end: var(--step);
+  font-family: system-ui, sans-serif;
+  font-size: 0.7em;
+  letter-spacing: 0.3em;
+  color: var(--ink-weak);
+}
+
+/* 灰の語りのような、余白に置かれる副の声 */
+#flow .track.faint {
+  color: color-mix(in srgb, var(--ink) 58%, var(--paper));
 }
 
 #flow p {
@@ -95,13 +118,16 @@ body[data-mode="horizontal"] {
   text-indent: 0;
 }
 
+/* 見出しの下のアキは、かならず行送りちょうど1本分にする。
+   端数が混じるとそれ以降の行がページの行グリッドから外れ、
+   ページの境目で行が切れてしまう */
 #flow h2,
 #flow h3 {
   margin: 0;
   font-size: 1em;
   font-weight: 600;
   letter-spacing: 0.25em;
-  padding-block-end: 1em;
+  padding-block-end: var(--step, 1.9em);
 }
 
 #flow ruby rt {
@@ -130,6 +156,92 @@ body[data-mode="horizontal"] {
   text-indent: 0;
 }
 
+/* 註釈 */
+
+#flow a.noteref {
+  font-size: 0.55em;
+  text-combine-upright: all;
+  vertical-align: super;
+  color: var(--accent);
+  text-decoration: none;
+  padding-inline: 0.15em;
+  cursor: pointer;
+}
+
+#flow a.noteref:hover {
+  text-decoration: underline;
+}
+
+/* 註釈の番号。段落の頭に組み込むので、行送りには影響しない */
+#flow span.note-no {
+  font-size: 0.8em;
+  font-weight: 600;
+  color: var(--ink-weak);
+  text-combine-upright: all;
+  padding-inline-end: 0.6em;
+  scroll-margin: 2rem;
+}
+
+/* 図版のページ */
+
+#flow section.plate {
+  display: grid;
+  place-items: center;
+  padding: 1.2rem;
+}
+
+#flow figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+#flow figure img {
+  max-width: 100%;
+  max-height: calc(100% - 2.6rem);
+  object-fit: contain;
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  cursor: zoom-in;
+}
+
+#flow figcaption {
+  font-family: system-ui, sans-serif;
+  font-size: 0.78rem;
+  color: var(--ink-weak);
+  text-align: center;
+}
+
+/* 図版の拡大 */
+
+#plate {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: color-mix(in srgb, var(--paper) 94%, transparent);
+  backdrop-filter: blur(4px);
+  cursor: zoom-out;
+}
+
+#plate[hidden] {
+  display: none;
+}
+
+#plate img {
+  max-width: 100%;
+  max-height: 100%;
+  background: #fff;
+  border: 1px solid var(--rule);
+}
+
 /* 横書きモード */
 
 body[data-mode="horizontal"] #stage {
@@ -153,13 +265,47 @@ body[data-mode="horizontal"] #flow section {
   position: static;
   width: auto;
   height: auto;
-  writing-mode: horizontal-tb;
   margin-block-end: 3em;
+}
+
+/* 横書きでは帯を並置できないので、上から順に読ませる */
+body[data-mode="horizontal"] #flow .track {
+  position: static;
+  width: auto;
+  height: auto !important;
+  font-size: inherit !important;
+  line-height: 1.9 !important;
+  writing-mode: horizontal-tb;
+  margin-block-end: 2em;
+}
+
+body[data-mode="horizontal"] #flow .track[data-role]::before {
+  content: attr(data-role);
+  display: block;
+  margin-block-end: 0.8em;
+  font-family: system-ui, sans-serif;
+  font-size: 0.75em;
+  letter-spacing: 0.2em;
+  color: var(--ink-weak);
 }
 
 body[data-mode="horizontal"] #flow h2 {
   letter-spacing: 0.1em;
   padding-block: 0 1em;
+}
+
+body[data-mode="horizontal"] #flow a.noteref,
+body[data-mode="horizontal"] #flow span.note-no {
+  text-combine-upright: none;
+}
+
+body[data-mode="horizontal"] #flow section.plate {
+  display: block;
+  padding: 0;
+}
+
+body[data-mode="horizontal"] #flow figure img {
+  max-height: none;
 }
 
 /* 操作系 */
@@ -209,7 +355,8 @@ body.ui-hidden #status {
 }
 
 #bar button,
-#toc button {
+#toc button,
+#status button {
   font: inherit;
   color: var(--ink-weak);
   background: none;
@@ -220,9 +367,19 @@ body.ui-hidden #status {
 }
 
 #bar button:hover,
-#toc button:hover {
+#toc button:hover,
+#status button:hover {
   color: var(--ink);
   border-color: var(--accent);
+}
+
+#back-note {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+#back-note[hidden] {
+  display: none;
 }
 
 #bar a {

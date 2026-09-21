@@ -2,11 +2,17 @@
 title: Works
 ---
 
+## 2024年
+
+[[works/enkyo|煙鏡]]
+
 ## 2023年
 
 [[works/eibesan|えいべさんオーディオコメンタリ版]]
 
 ## 2020年
+
+[[works/harugasumi|春霞エンタングルメント]]
 
 [[works/umc2273|UMC2273テイスティングレポート]]
 
@@ -15,6 +21,14 @@ title: Works
 [[works/kani|蟹と待ち合わせ]]
 
 [[works/tobiishi|飛石]]
+
+## 2018年
+
+[[works/kyotai|筐体反転]]
+
+## 2017年
+
+[[works/bokyo|望郷]]
 
 ## 2016年
 

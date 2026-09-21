@@ -33,12 +33,17 @@
     <button class="turn" id="next" type="button" aria-label="次のページ">‹</button>
     <button class="turn" id="prev" type="button" aria-label="前のページ">›</button>
 
-    <footer id="status"><span id="page-label"></span></footer>
+    <footer id="status">
+      <span id="page-label"></span>
+      <button id="back-note" type="button" hidden>本文へ戻る</button>
+    </footer>
 
     <nav id="toc" hidden aria-label="目次">
       <p class="meta" id="toc-meta"></p>
       <ol id="toc-list"></ol>
     </nav>
+
+    <div id="plate" hidden><img alt="" /></div>
 
     <div id="message">読み込み中……</div>
 

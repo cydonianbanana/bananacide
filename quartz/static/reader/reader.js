@@ -3,12 +3,20 @@
 // 縦書きリーダー。/works/data/<slug>.json を読み、紙面を横方向に送って表示する。
 // 行送り（line-height）を整数pxに固定し、ページ幅をその整数倍にすることで、
 // ページの境目がつねに行の切れ目に一致するようにしている。
+//
+// 節は1本以上の「帯（トラック）」を持つ。帯はいずれも節の右端を原点として
+// 横へ流れるので、ページを送れば全ての帯が同時に進む。春霞エンタングルメントの
+// 三段組や筐体反転の上下段は、これで同期する。
 
 const SIZES = { s: 16, m: 18, l: 21 }
 const SIZE_ORDER = ["s", "m", "l"]
 const LINE_HEIGHT_FACTOR = 1.9
 const MAX_LINES_PER_PAGE = 24
 const MAX_CHARS_PER_LINE = 38
+const FAINT_SCALE = 0.86
+// 帯を並べるには、いちばん狭い帯にこれだけの字数が要る。
+// 足りない画面では並置をやめ、帯を順に読ませる
+const MIN_CHARS_PER_BAND = 8
 const SWIPE_THRESHOLD = 40
 const SETTINGS_KEY = "reader:settings"
 
@@ -21,6 +29,9 @@ const els = {
   pageLabel: document.getElementById("page-label"),
   message: document.getElementById("message"),
   back: document.getElementById("back"),
+  backNote: document.getElementById("back-note"),
+  plate: document.getElementById("plate"),
+  plateImage: document.querySelector("#plate img"),
   toc: document.getElementById("toc"),
   tocList: document.getElementById("toc-list"),
   tocMeta: document.getElementById("toc-meta"),
@@ -31,6 +42,7 @@ let slug = ""
 let data = null
 let sections = []
 let paragraphs = [] // {el, page} 組み直しのたびに作る、段落とページの対応表
+let noteReturn = [] // 註釈へ飛ぶ前にいたページ
 let mode = "vertical"
 let size = "m"
 let page = 0
@@ -92,49 +104,100 @@ function isDark() {
 
 // 本文の組み立て
 
+let paragraphCounter = 0
+
+function appendBlocks(node, blocks) {
+  for (const block of blocks) {
+    if (block.type === "gap") {
+      const gap = document.createElement("p")
+      gap.className = "gap"
+      gap.setAttribute("aria-hidden", "true")
+      gap.textContent = "　"
+      node.append(gap)
+      continue
+    }
+    const el = document.createElement(block.type === "h3" ? "h3" : "p")
+    el.innerHTML = block.html
+    if (block.kind) el.className = block.kind
+    if (block.type !== "h3") el.dataset.i = String(paragraphCounter++)
+    node.append(el)
+  }
+}
+
+function buildPlate(figure) {
+  const el = document.createElement("section")
+  el.className = "plate"
+
+  const wrap = document.createElement("figure")
+  const image = document.createElement("img")
+  image.src = figure.src
+  image.alt = figure.caption
+  image.width = figure.w
+  image.height = figure.h
+  image.addEventListener("click", () => showPlate(figure))
+
+  const caption = document.createElement("figcaption")
+  caption.textContent = figure.caption
+
+  wrap.append(image, caption)
+  el.append(wrap)
+  return { el, tracks: [], figure, heading: null, startPage: 0, pageCount: 1 }
+}
+
+function buildTrack(def, heading) {
+  const node = document.createElement("div")
+  node.className = def.style === "faint" ? "track faint" : "track"
+  if (def.role) node.dataset.role = def.role
+
+  if (heading) {
+    const title = document.createElement("h2")
+    title.textContent = heading
+    node.append(title)
+  }
+  appendBlocks(node, def.blocks)
+
+  return {
+    node,
+    top: typeof def.top === "number" ? def.top : 0,
+    height: typeof def.height === "number" ? def.height : 1,
+    scale: def.style === "faint" ? FAINT_SCALE : 1,
+  }
+}
+
 function render() {
   els.flow.textContent = ""
-  let index = 0
+  paragraphCounter = 0
 
   sections = data.sections.map((source) => {
+    if (source.figure) {
+      const plate = buildPlate(source.figure)
+      els.flow.append(plate.el)
+      return plate
+    }
+
     const el = document.createElement("section")
-
-    if (source.heading) {
-      const heading = document.createElement("h2")
-      heading.textContent = source.heading
-      el.append(heading)
-    }
-
-    for (const block of source.blocks) {
-      if (block.type === "gap") {
-        const gap = document.createElement("p")
-        gap.className = "gap"
-        gap.setAttribute("aria-hidden", "true")
-        gap.textContent = "　"
-        el.append(gap)
-        continue
-      }
-      const node = document.createElement(block.type === "h3" ? "h3" : "p")
-      node.innerHTML = block.html
-      if (block.kind) node.className = block.kind
-      if (block.type !== "h3") node.dataset.i = String(index++)
-      el.append(node)
-    }
-
-    // 本文の終端を測るための目印。max-content の解釈がずれる環境への保険
-    const tail = document.createElement("span")
-    tail.textContent = "​"
-    el.append(tail)
+    const defs = source.tracks || [{ top: 0, height: 1, blocks: source.blocks }]
+    const tracks = defs.map((def, index) =>
+      buildTrack(def, index === 0 ? source.heading : null),
+    )
+    for (const track of tracks) el.append(track.node)
 
     els.flow.append(el)
-    return { el, tail, heading: source.heading, startPage: 0, pageCount: 1 }
+    return { el, tracks, figure: null, heading: source.heading, startPage: 0, pageCount: 1 }
   })
 }
 
-function measureSection(section) {
-  const box = section.el.getBoundingClientRect()
-  const tail = section.tail.getBoundingClientRect()
-  return Math.max(box.width, box.right - tail.left)
+// 帯が実際に使った幅。max-content の解釈は環境でぶれるうえ、
+// 終端の目印を置くとそれ自体が1列を占めて空のページを生むので、
+// 中身の要素がどこまで左へ伸びたかを直接測る
+function measureTrack(track) {
+  const box = track.node.getBoundingClientRect()
+  let left = box.right
+  for (const child of track.node.children) {
+    const rect = child.getBoundingClientRect()
+    if (rect.width || rect.height) left = Math.min(left, rect.left)
+  }
+  return left < box.right ? box.right - left : box.width
 }
 
 // 組み付け
@@ -148,7 +211,18 @@ function layout(keep) {
   els.flow.style.lineHeight = `${advance}px`
 
   if (mode === "horizontal") {
-    for (const section of sections) section.el.style.right = ""
+    for (const section of sections) {
+      section.el.style.right = ""
+      section.el.style.width = ""
+      for (const track of section.tracks) {
+        track.node.style.top = ""
+        track.node.style.height = ""
+        track.node.style.right = ""
+        track.node.style.fontSize = ""
+        track.node.style.lineHeight = ""
+        track.node.style.removeProperty("--step")
+      }
+    }
     els.viewport.style.width = ""
     els.viewport.style.height = ""
     els.flow.style.transform = ""
@@ -177,12 +251,51 @@ function layout(keep) {
   els.viewport.style.width = `${pageWidth}px`
   els.viewport.style.height = `${Math.floor(lineLength)}px`
 
+  // いちばん狭い帯が読める高さかどうかで、並置するか順に読ませるかを決める
+  const narrowest = Math.min(1, ...sections.flatMap((s) => s.tracks.map((t) => t.height)))
+  const stacked = lineLength * narrowest < fontSize * MIN_CHARS_PER_BAND
+  els.body.classList.toggle("stacked", stacked)
+
   let offset = 0
   for (const section of sections) {
     section.el.style.right = "0px"
-    const width = measureSection(section)
-    section.pageCount = Math.max(1, Math.ceil((width - 2) / pageWidth))
+    section.el.style.width = `${pageWidth}px`
+
+    if (section.figure) {
+      section.pageCount = 1
+    } else {
+      let width = 0
+      let stackedWidth = 0
+      for (const track of section.tracks) {
+        // 順に読ませるときは、どの帯も紙面いっぱいを使う
+        track.node.style.top = stacked ? "0%" : `${track.top * 100}%`
+        track.node.style.height = stacked ? "100%" : `${track.height * 100}%`
+        // 帯ごとに級数を変えても、行送りがページ幅を割り切るようにしておく。
+        // そうしないと帯の行がページの境目で真っ二つになる
+        const wanted = advance * track.scale
+        const lines = Math.max(1, Math.round(pageWidth / wanted))
+        const step = pageWidth / lines
+        track.node.style.lineHeight = `${step}px`
+        track.node.style.fontSize = `${step / LINE_HEIGHT_FACTOR}px`
+        // 見出しの下のアキもこの幅にそろえる（reader.css の --step）
+        track.node.style.setProperty("--step", `${step}px`)
+
+        const measured = measureTrack(track)
+        width = Math.max(width, measured)
+        if (stacked && section.tracks.length > 1) {
+          track.node.style.right = `${stackedWidth}px`
+          stackedWidth += Math.max(1, Math.ceil((measured - 2) / pageWidth)) * pageWidth
+        } else {
+          track.node.style.right = "0px"
+        }
+      }
+      section.pageCount = stackedWidth
+        ? stackedWidth / pageWidth
+        : Math.max(1, Math.ceil((width - 2) / pageWidth))
+    }
+
     section.startPage = offset / pageWidth
+    section.el.style.width = `${section.pageCount * pageWidth}px`
     section.el.style.right = `${offset}px`
     offset += section.pageCount * pageWidth
   }
@@ -197,17 +310,22 @@ function layout(keep) {
 // ページ送りのアニメーション中に座標を読むと途中の値を拾ってしまうため、
 // 栞や組み直しではこの表だけを使う
 function indexParagraphs() {
-  const flowRight = els.flow.getBoundingClientRect().right
   paragraphs = Array.from(els.flow.querySelectorAll("p[data-i]"), (el) => ({
     el,
-    page: Math.max(0, Math.floor((flowRight - el.getBoundingClientRect().right + 2) / pageWidth)),
+    page: measurePage(el),
   }))
+}
+
+// #flow と要素は同じ transform で動くので、右端からの距離はページ送り中も変わらない
+function measurePage(el) {
+  const flowRight = els.flow.getBoundingClientRect().right
+  return Math.max(0, Math.floor((flowRight - el.getBoundingClientRect().right + 2) / pageWidth))
 }
 
 function pageOf(el) {
   if (mode === "horizontal") return 0
   const hit = paragraphs.find((entry) => entry.el === el)
-  return hit ? hit.page : 0
+  return hit ? hit.page : measurePage(el)
 }
 
 function currentParagraph() {
@@ -248,6 +366,7 @@ function goto(target, animate = true) {
 }
 
 function turn(delta) {
+  clearNoteReturn()
   goto(page + delta)
 }
 
@@ -284,24 +403,72 @@ function restoreMark(mark) {
   else goto(pageOf(el), false)
 }
 
+// 註釈の往復
+
+function clearNoteReturn() {
+  if (!noteReturn.length) return
+  noteReturn = []
+  els.backNote.hidden = true
+}
+
+function jumpToNote(number) {
+  const target = els.flow.querySelector(`[id="note-${CSS.escape(number)}"]`)
+  if (!target) return
+  if (mode === "horizontal") {
+    target.scrollIntoView({ block: "start", behavior: "smooth" })
+    return
+  }
+  noteReturn.push(page)
+  els.backNote.hidden = false
+  goto(measurePage(target))
+}
+
+function returnFromNote() {
+  const back = noteReturn.pop()
+  if (back === undefined) return
+  if (!noteReturn.length) els.backNote.hidden = true
+  goto(back)
+}
+
+// 図版の拡大
+
+function showPlate(figure) {
+  els.plateImage.src = figure.src
+  els.plateImage.alt = figure.caption
+  els.plate.hidden = false
+}
+
+function hidePlate() {
+  els.plate.hidden = true
+  els.plateImage.removeAttribute("src")
+}
+
 // 目次
 
 function buildToc() {
   els.tocMeta.textContent = [data.issue, `全${data.chars}字`].filter(Boolean).join("　/　")
   els.tocList.textContent = ""
 
+  // 見出しのある作品は見出しだけを並べる。無い作品は節に番号を振る
+  const titled = sections.some((section) => section.heading)
+
   sections.forEach((section, i) => {
+    if (section.figure) return
+    if (titled && !section.heading) return
+    const label = section.heading || (i === 0 ? "本文" : `第${i + 1}節`)
+
     const item = document.createElement("li")
     const button = document.createElement("button")
     button.type = "button"
 
-    const label = document.createElement("span")
-    label.textContent = section.heading || (i === 0 ? "本文" : `第${i + 1}節`)
+    const name = document.createElement("span")
+    name.textContent = label
     const number = document.createElement("span")
     number.textContent = mode === "vertical" ? `${section.startPage + 1}` : ""
 
-    button.append(label, number)
+    button.append(name, number)
     button.addEventListener("click", () => {
+      clearNoteReturn()
       if (mode === "vertical") goto(section.startPage)
       else section.el.scrollIntoView({ block: "start", behavior: "smooth" })
       toggleToc(false)
@@ -324,6 +491,7 @@ function setMode(next) {
   const anchor = currentParagraph()
   mode = next
   els.body.dataset.mode = mode
+  clearNoteReturn()
   refreshControls()
   saveSettings()
   layout(anchor)
@@ -344,6 +512,8 @@ function bindControls() {
   document.getElementById("size-up").addEventListener("click", () => setSize(1))
   document.getElementById("size-down").addEventListener("click", () => setSize(-1))
   els.tocToggle.addEventListener("click", () => toggleToc())
+  els.backNote.addEventListener("click", returnFromNote)
+  els.plate.addEventListener("click", hidePlate)
 
   document.getElementById("mode-toggle").addEventListener("click", () => {
     setMode(mode === "vertical" ? "horizontal" : "vertical")
@@ -355,8 +525,20 @@ function bindControls() {
     saveSettings()
   })
 
+  // 本文中の註釈番号。ページ送りのタップ判定より先に処理する
+  els.flow.addEventListener("click", (event) => {
+    const ref = event.target.closest("a.noteref")
+    if (!ref) return
+    event.preventDefault()
+    event.stopPropagation()
+    jumpToNote(ref.dataset.note)
+  })
+
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") return toggleToc(false)
+    if (event.key === "Escape") {
+      if (!els.plate.hidden) return hidePlate()
+      return toggleToc(false)
+    }
     if (mode !== "vertical") return
     switch (event.key) {
       case "ArrowLeft":
@@ -385,7 +567,7 @@ function bindControls() {
   window.addEventListener(
     "wheel",
     (event) => {
-      if (mode !== "vertical" || !els.toc.hidden) return
+      if (mode !== "vertical" || !els.toc.hidden || !els.plate.hidden) return
       event.preventDefault()
       wheelAcc += Math.abs(event.deltaY) > Math.abs(event.deltaX) ? event.deltaY : event.deltaX
       if (Math.abs(wheelAcc) < 40) return
@@ -405,6 +587,7 @@ function bindControls() {
     const dx = event.clientX - start.x
     const dy = event.clientY - start.y
     start = null
+    if (event.target.closest("a.noteref, #flow figure img")) return
     if (mode === "vertical" && Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
       turn(dx > 0 ? 1 : -1)
       return
@@ -473,6 +656,10 @@ async function main() {
   // 明朝体の読み込み完了で字幅が変わるので、組み直す
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(() => layout())
+  }
+  // 図版の読み込みでも紙面の幅が変わる
+  for (const image of els.flow.querySelectorAll("img")) {
+    image.addEventListener("load", () => layout(), { once: true })
   }
 }
 
