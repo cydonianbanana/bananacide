@@ -116,6 +116,7 @@ function render() {
       }
       const node = document.createElement(block.type === "h3" ? "h3" : "p")
       node.innerHTML = block.html
+      if (block.kind) node.className = block.kind
       if (block.type !== "h3") node.dataset.i = String(index++)
       el.append(node)
     }
@@ -417,6 +418,9 @@ function bindControls() {
     window.clearTimeout(scrollTimer)
     scrollTimer = window.setTimeout(saveMark, 200)
   })
+
+  // 断片だけが変わっても読み込み直す（別の作品へのリンクを踏んだとき）
+  window.addEventListener("hashchange", () => location.reload())
 
   let resizeTimer = 0
   const relayout = () => {

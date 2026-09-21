@@ -114,6 +114,22 @@ body[data-mode="horizontal"] {
   text-combine-upright: all;
 }
 
+#flow em.bouten {
+  font-style: normal;
+  text-emphasis: filled sesame;
+  -webkit-text-emphasis: filled sesame;
+}
+
+/* オーディオコメンタリの映像描写のような、地の文の塊 */
+#flow p.desc,
+#flow p.desc-open {
+  color: color-mix(in srgb, var(--ink) 76%, var(--paper));
+}
+
+#flow p.desc-open {
+  text-indent: 0;
+}
+
 /* 横書きモード */
 
 body[data-mode="horizontal"] #stage {
