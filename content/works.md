@@ -10,6 +10,12 @@ title: Works
 
 [[works/eibesan|えいべさんオーディオコメンタリ版]]
 
+## 2022年
+
+[[works/etsuransha|閲覧者]]
+
+[[works/ryoshuzu|虜囚図]]
+
 ## 2020年
 
 [[works/harugasumi|春霞エンタングルメント]]

@@ -123,6 +123,42 @@ body.stacked #flow .track[data-role]::before {
   text-indent: 0;
 }
 
+/* レイヤー（閲覧者）。縦組では inline の始まりが天なので、段下げは
+   そのまま天からの食い込みになる。横書きなら左からの字下げになる。
+   段差は行送りと直交する量なので、ページの行グリッドには影響しない。
+   --d は深さ（0 が最上段）、--indent は1段ぶんの量で reader.js が渡す */
+#flow p[data-depth] {
+  margin-inline-start: calc(var(--d, 0) * var(--indent, 1em));
+  text-indent: 0;
+}
+
+/* エピグラフと出典注記 */
+#flow p.quote {
+  font-size: 0.86em;
+  margin-inline: 2em 1em;
+  text-indent: 0;
+}
+
+#flow p.quote-by {
+  font-size: 0.86em;
+  margin-inline: 2em 1em;
+  text-indent: 0;
+  text-align: end;
+}
+
+/* 画面からの引用。縦組では欧字が倒れるので、書体だけ等幅にする */
+#flow p.code {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 0.86em;
+  text-indent: 0;
+}
+
+/* 明朝の合成ボールドは縦組で汚いので、ゴシックに振る */
+#flow strong {
+  font-weight: 500;
+  font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
+}
+
 /* ページをまたいだ段落の、続きのほう */
 #flow p.cont {
   text-indent: 0;

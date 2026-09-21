@@ -19,6 +19,8 @@ const FAINT_SCALE = 0.86
 const MIN_CHARS_PER_BAND = 8
 // 傾斜する帯が、いちばん狭くなったときでも確保する字数と、流し込みの安全弁
 const MIN_CHARS_PER_RAMP = 3
+// レイヤー（段下げ）のいちばん深いところに残す字数。段差はここまで詰められる
+const MIN_CHARS_PER_LAYER = 8
 const MAX_RAMP_PAGES = 400
 const SWIPE_THRESHOLD = 40
 const SETTINGS_KEY = "reader:settings"
@@ -46,6 +48,7 @@ let data = null
 let sections = []
 let paragraphs = [] // {el, page} 組み直しのたびに作る、段落とページの対応表
 let noteReturn = [] // 註釈へ飛ぶ前にいたページ
+let layers = null // {min, max} レイヤーを持つ作品の、段下げの深さの範囲
 let mode = "vertical"
 let size = "m"
 let page = 0
@@ -122,6 +125,11 @@ function appendBlocks(node, blocks) {
     const el = document.createElement(block.type === "h3" ? "h3" : "p")
     el.innerHTML = block.html
     if (block.kind) el.className = block.kind
+    // 天からの段下げ。深さ0が版面の上端で、負の深さはそこより上へ出る
+    if (layers && typeof block.depth === "number") {
+      el.dataset.depth = String(block.depth)
+      el.style.setProperty("--d", String(block.depth - layers.min))
+    }
     if (block.type !== "h3") el.dataset.i = String(paragraphCounter++)
     node.append(el)
   }
@@ -175,6 +183,25 @@ function buildTrack(def, heading) {
     role: def.role || "",
     ramped,
   }
+}
+
+// 段下げを持つ作品かどうか。深さの範囲は、組み付けで段差を決めるのに要る
+function measureLayers() {
+  let min = null
+  let max = null
+  for (const section of data.sections) {
+    const groups = section.tracks
+      ? section.tracks.map((track) => track.blocks)
+      : [section.blocks || []]
+    for (const blocks of groups) {
+      for (const block of blocks) {
+        if (typeof block.depth !== "number") continue
+        min = min === null ? block.depth : Math.min(min, block.depth)
+        max = max === null ? block.depth : Math.max(max, block.depth)
+      }
+    }
+  }
+  return min === null ? null : { min, max }
 }
 
 function render() {
@@ -520,6 +547,7 @@ function layout(keep) {
     }
     els.viewport.style.width = ""
     els.viewport.style.height = ""
+    els.flow.style.removeProperty("--indent") // 横書きの段下げは CSS の既定値に任せる
     els.flow.style.transform = ""
     paragraphs = []
     pages = 1
@@ -536,7 +564,23 @@ function layout(keep) {
   const availableHeight =
     els.stage.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom)
 
-  const lineLength = Math.max(advance * 4, Math.min(availableHeight, fontSize * MAX_CHARS_PER_LINE))
+  // 段下げを持つ作品では、版面の上端より上へ出る段のぶんだけ天に逃げ場を作る。
+  // 段差は1字。狭い画面では、いちばん深い段に字が残るところまで詰める
+  const up = layers ? Math.max(0, -layers.min) : 0
+  const down = layers ? Math.max(0, layers.max) : 0
+  const lineLength = Math.max(
+    advance * 4,
+    Math.min(availableHeight, fontSize * (MAX_CHARS_PER_LINE + up)),
+  )
+  const indent =
+    up + down
+      ? Math.max(
+          0,
+          Math.min(fontSize, (lineLength - MIN_CHARS_PER_LAYER * fontSize) / (up + down)),
+        )
+      : 0
+  els.flow.style.setProperty("--indent", `${indent}px`)
+
   const linesPerPage = Math.max(
     1,
     Math.min(MAX_LINES_PER_PAGE, Math.floor(availableWidth / advance)),
@@ -956,6 +1000,7 @@ async function main() {
   els.back.href = `/works/${slug}`
 
   const mark = readStore(`reader:${slug}:mark`)
+  layers = measureLayers()
   render()
   layout()
   restoreMark(mark)
