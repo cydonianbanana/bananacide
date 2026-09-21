@@ -1,0 +1,330 @@
+/* 縦書きリーダー。配色は quartz.config.default.yaml の値に合わせている */
+
+:root {
+  --paper: #f8f8f8;
+  --ink: #100f0f;
+  --ink-weak: #6f6b68;
+  --rule: #cecdc3;
+  --panel: #f2f0e5;
+  --accent: #5e409d;
+  --shadow: rgba(16, 15, 15, 0.12);
+  --lines-per-page: 24;
+  --line-length-max: 38;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #100f0f;
+    --ink: #cecdc3;
+    --ink-weak: #9f9898;
+    --rule: #403e3c;
+    --panel: #282726;
+    --accent: #a68adf;
+    --shadow: rgba(0, 0, 0, 0.5);
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper: #100f0f;
+  --ink: #cecdc3;
+  --ink-weak: #9f9898;
+  --rule: #403e3c;
+  --panel: #282726;
+  --accent: #a68adf;
+  --shadow: rgba(0, 0, 0, 0.5);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Noto Serif JP", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+body[data-mode="horizontal"] {
+  overflow: auto;
+}
+
+/* 紙面 */
+
+#stage {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 3.4rem 1rem 2.6rem;
+}
+
+#viewport {
+  position: relative;
+  overflow: hidden;
+}
+
+#flow {
+  position: absolute;
+  inset: 0;
+  transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+#flow section {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: max-content;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  line-break: strict;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+#flow p {
+  margin: 0;
+  text-indent: 1em;
+}
+
+#flow p.gap {
+  text-indent: 0;
+}
+
+#flow h2,
+#flow h3 {
+  margin: 0;
+  font-size: 1em;
+  font-weight: 600;
+  letter-spacing: 0.25em;
+  padding-block-end: 1em;
+}
+
+#flow ruby rt {
+  font-size: 0.5em;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.tcy {
+  text-combine-upright: all;
+}
+
+/* 横書きモード */
+
+body[data-mode="horizontal"] #stage {
+  position: static;
+  display: block;
+  padding: 4.2rem 1.2rem 4rem;
+}
+
+body[data-mode="horizontal"] #viewport,
+body[data-mode="horizontal"] #flow {
+  position: static;
+  overflow: visible;
+  width: auto;
+  height: auto;
+  transform: none !important;
+  margin: 0 auto;
+  max-width: 34em;
+}
+
+body[data-mode="horizontal"] #flow section {
+  position: static;
+  width: auto;
+  height: auto;
+  writing-mode: horizontal-tb;
+  margin-block-end: 3em;
+}
+
+body[data-mode="horizontal"] #flow h2 {
+  letter-spacing: 0.1em;
+  padding-block: 0 1em;
+}
+
+/* 操作系 */
+
+#bar,
+#status {
+  position: fixed;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.9rem;
+  font-family: system-ui, sans-serif;
+  font-size: 0.8rem;
+  color: var(--ink-weak);
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  backdrop-filter: blur(6px);
+  transition: opacity 0.2s;
+}
+
+#bar {
+  inset: 0 0 auto 0;
+  border-block-end: 1px solid var(--rule);
+}
+
+#status {
+  inset: auto 0 0 0;
+  justify-content: center;
+  border-block-start: 1px solid var(--rule);
+  font-variant-numeric: tabular-nums;
+}
+
+body.ui-hidden #bar,
+body.ui-hidden #status {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#work-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+  font-family: inherit;
+}
+
+#bar button,
+#toc button {
+  font: inherit;
+  color: var(--ink-weak);
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+}
+
+#bar button:hover,
+#toc button:hover {
+  color: var(--ink);
+  border-color: var(--accent);
+}
+
+#bar a {
+  color: var(--ink-weak);
+  text-decoration: none;
+  border-bottom: 1px solid var(--rule);
+}
+
+#bar a:hover {
+  color: var(--accent);
+}
+
+/* ページ送り */
+
+.turn {
+  position: fixed;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  width: 18%;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: var(--ink-weak);
+  opacity: 0;
+  transition: opacity 0.2s;
+  font-size: 1.6rem;
+}
+
+.turn:hover,
+.turn:focus-visible {
+  opacity: 0.7;
+}
+
+#next {
+  left: 0;
+}
+
+#prev {
+  right: 0;
+}
+
+body[data-mode="horizontal"] .turn {
+  display: none;
+}
+
+/* 目次 */
+
+#toc {
+  position: fixed;
+  z-index: 4;
+  inset: 0 0 0 auto;
+  width: min(20rem, 82vw);
+  padding: 3.4rem 1.2rem 1.2rem;
+  overflow-y: auto;
+  background: var(--panel);
+  border-inline-start: 1px solid var(--rule);
+  box-shadow: -8px 0 24px var(--shadow);
+  font-family: system-ui, sans-serif;
+  font-size: 0.85rem;
+}
+
+#toc[hidden] {
+  display: none;
+}
+
+#toc ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#toc li {
+  border-block-end: 1px solid var(--rule);
+}
+
+#toc li button {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  padding: 0.7rem 0.2rem;
+  text-align: start;
+}
+
+#toc li button span:last-child {
+  color: var(--ink-weak);
+  font-variant-numeric: tabular-nums;
+}
+
+#toc .meta {
+  margin: 0 0 1rem;
+  color: var(--ink-weak);
+  line-height: 1.7;
+}
+
+/* 状態表示 */
+
+#message {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  text-align: center;
+  line-height: 1.9;
+  background: var(--paper);
+}
+
+#message[hidden] {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #flow {
+    transition: none;
+  }
+}

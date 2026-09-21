@@ -9,3 +9,23 @@
 .folder-outer {
   display: none !important;
 }
+
+// works（小説）のページ。作成日と読了時間はファイルの都合でしかないので出さない
+body[data-slug^="works"] .content-meta {
+  display: none;
+}
+
+// 縦書きリーダーへの導線
+.read-link {
+  display: inline-block;
+  margin: 1.4rem 0;
+  padding: 0.5rem 1.4rem;
+  border: 1px solid var(--lightgray);
+  border-radius: 4px;
+  background-color: var(--lightgray);
+  text-decoration: none;
+
+  &:hover {
+    border-color: var(--secondary);
+  }
+}
