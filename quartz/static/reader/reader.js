@@ -177,8 +177,11 @@ function render() {
 
     const el = document.createElement("section")
     const defs = source.tracks || [{ top: 0, height: 1, blocks: source.blocks }]
+    // 節の見出しは主の声に付ける。終章で灰の語りが上の帯に来ても、
+    // 見出しは本文の側に残る
+    const titled = Math.max(0, defs.findIndex((def) => def.style !== "faint"))
     const tracks = defs.map((def, index) =>
-      buildTrack(def, index === 0 ? source.heading : null),
+      buildTrack(def, index === titled ? source.heading : null),
     )
     for (const track of tracks) el.append(track.node)
 
