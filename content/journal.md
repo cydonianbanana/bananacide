@@ -2,8 +2,6 @@
 title: Journal
 ---
 
-# Journal
-
 ![[journal/2026-09-21]]
 
 ![[journal/2026-08-23]]
