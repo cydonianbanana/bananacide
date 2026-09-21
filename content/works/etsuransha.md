@@ -3,7 +3,7 @@ title: 閲覧者
 year: 2022
 issue: ねじれ双角錐群 第七短編集『故障かなと思ったら』
 source: 30_Works/15_閲覧者/閲覧者.md
-layers: true
+layers: 2
 mono: true
 ---
 

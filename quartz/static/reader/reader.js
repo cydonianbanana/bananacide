@@ -565,18 +565,23 @@ function layout(keep) {
     els.stage.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom)
 
   // 段下げを持つ作品では、版面の上端より上へ出る段のぶんだけ天に逃げ場を作る。
-  // 段差は1字。狭い画面では、いちばん深い段に字が残るところまで詰める
+  // 1段の段差は作品が決める（既定1字）。狭い画面では、いちばん深い段に
+  // 字が残るところまで詰める
+  const step = layers ? data.layerStep || 1 : 0
   const up = layers ? Math.max(0, -layers.min) : 0
   const down = layers ? Math.max(0, layers.max) : 0
   const lineLength = Math.max(
     advance * 4,
-    Math.min(availableHeight, fontSize * (MAX_CHARS_PER_LINE + up)),
+    Math.min(availableHeight, fontSize * (MAX_CHARS_PER_LINE + up * step)),
   )
   const indent =
     up + down
       ? Math.max(
           0,
-          Math.min(fontSize, (lineLength - MIN_CHARS_PER_LAYER * fontSize) / (up + down)),
+          Math.min(
+            fontSize * step,
+            (lineLength - MIN_CHARS_PER_LAYER * fontSize) / (up + down),
+          ),
         )
       : 0
   els.flow.style.setProperty("--indent", `${indent}px`)
