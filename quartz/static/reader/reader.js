@@ -110,6 +110,9 @@ function isDark() {
 
 // 本文の組み立て
 
+// 行頭のカギ括弧。括弧そのものが字下げの役を果たすので、段落の字下げは付けない
+const SPEECH_HEAD_RE = /^[「『]/
+
 let paragraphCounter = 0
 
 function appendBlocks(node, blocks) {
@@ -125,6 +128,10 @@ function appendBlocks(node, blocks) {
     const el = document.createElement(block.type === "h3" ? "h3" : "p")
     el.innerHTML = block.html
     if (block.kind) el.className = block.kind
+    // kind と併せ持つ（《…》内の台詞など）ので、className を潰さず足す
+    if (block.type !== "h3" && SPEECH_HEAD_RE.test(el.textContent)) {
+      el.classList.add("speech")
+    }
     // 天からの段下げ。深さ0が版面の上端で、負の深さはそこより上へ出る
     if (layers && typeof block.depth === "number") {
       el.dataset.depth = String(block.depth)
