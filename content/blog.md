@@ -4,7 +4,7 @@ title: Blog
 
 ## 2026年
 
-[[blog/エースコンバット8の感想|エースコンバット8の感想]]
+[[blog/ACE COMBAT 8 WINGS OF THEVEの感想|ACE COMBAT 8 WINGS OF THEVEの感想]]
 
 [[blog/2026年上期買ってよかったものリスト|2026年上期買ってよかったものリスト]]
 
