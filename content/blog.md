@@ -4,6 +4,8 @@ title: Blog
 
 ## 2026年
 
+[[blog/2025年に聴いた音楽まとめ|2025年に聴いた音楽まとめ]]
+
 [[blog/ねじれ双角錐群|ねじれ双角錐群]]
 
 [[blog/ACE COMBAT 8 WINGS OF THEVEの感想|ACE COMBAT 8 WINGS OF THEVEの感想]]
